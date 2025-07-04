@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poetry Moments - Share Beautiful Poems</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+            letter-spacing: -1px;
+        }
+
+        .poem-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .poem-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .poem-title {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .poem-author {
+            font-size: 1.1em;
+            color: #666;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        .poem-text {
+            font-size: 1.2em;
+            line-height: 1.8;
+            color: #444;
+            white-space: pre-line;
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .file-input {
+            margin: 20px 0;
+            padding: 15px;
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-input input[type="file"] {
+            margin: 10px 0;
+        }
+
+        .loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.8s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .share-canvas {
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+            
+            .poem-container {
+                padding: 20px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Poetry Moments</h1>
+        
+        <div class="poem-container fade-in" id="poemContainer">
+            <div class="poem-title" id="poemTitle">Loading...</div>
+            <div class="poem-author" id="poemAuthor">Please wait</div>
+            <div class="poem-text" id="poemText">Loading your poetry collection...</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn btn-primary" id="newPoemBtn" onclick="displayRandomPoem()">New Poem</button>
+            <button class="btn btn-secondary" id="saveImageBtn" onclick="saveAsImage()">Save as Image</button>
+        </div>
+    </div>
+
+    <canvas id="shareCanvas" class="share-canvas"></canvas>
+
+    <script>
+        let poemsData = [];
+        let currentPoem = null;
+        let watermarkImg = new Image();
+        
+        // Load watermark image
+        watermarkImg.src = 'watermark.png';
+        watermarkImg.onerror = function() {
+            console.log('Watermark image not found, using text watermark');
+        };
+
+        // Load poems from CSV file
+        async function loadPoems() {
+            try {
+                const response = await fetch('poems.csv');
+                if (!response.ok) {
+                    throw new Error('Could not load poems.csv');
+                }
+                const csvText = await response.text();
+                parseCSV(csvText);
+                
+                if (poemsData.length > 0) {
+                    displayRandomPoem();
+                } else {
+                    showError('No poems found in the CSV file');
+                }
+            } catch (error) {
+                console.error('Error loading poems:', error);
+                showError('Could not load poems. Please ensure poems.csv is in the same directory.');
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('poemTitle').textContent = 'Error';
+            document.getElementById('poemAuthor').textContent = '';
+            document.getElementById('poemText').textContent = message;
+        }
+
+        // Remove file upload handler - no longer needed
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            
+            // Find column indices
+            const titleIndex = headers.findIndex(h => h.includes('title'));
+            const authorIndex = headers.findIndex(h => h.includes('author'));
+            const contentIndex = headers.findIndex(h => h.includes('content') || h.includes('poem') || h.includes('text'));
+            
+            if (titleIndex === -1 || authorIndex === -1 || contentIndex === -1) {
+                alert('CSV must contain columns for title, author, and content');
+                return;
+            }
+
+            poemsData = [];
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line) {
+                    const columns = parseCSVLine(line);
+                    if (columns.length > Math.max(titleIndex, authorIndex, contentIndex)) {
+                        poemsData.push({
+                            title: columns[titleIndex]?.trim() || 'Untitled',
+                            author: columns[authorIndex]?.trim() || 'Unknown',
+                            content: columns[contentIndex]?.trim().replace(/\\n/g, '\n') || ''
+                        });
+                    }
+                }
+            }
+            
+            if (poemsData.length > 0) {
+                displayRandomPoem();
+            } else {
+                showError('No valid poems found in the CSV file');
+            }
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current);
+            return result;
+        }
+
+        function displayRandomPoem() {
+            if (poemsData.length === 0) {
+                showError('No poems available. Please check your poems.csv file.');
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * poemsData.length);
+            currentPoem = poemsData[randomIndex];
+            
+            const container = document.getElementById('poemContainer');
+            container.classList.add('loading');
+            
+            setTimeout(() => {
+                document.getElementById('poemTitle').textContent = currentPoem.title;
+                document.getElementById('poemAuthor').textContent = `by ${currentPoem.author}`;
+                document.getElementById('poemText').textContent = currentPoem.content;
+                
+                container.classList.remove('loading');
+                container.classList.remove('fade-in');
+                setTimeout(() => container.classList.add('fade-in'), 10);
+            }, 300);
+        }
+
+        function saveAsImage() {
+            if (!currentPoem) {
+                alert('Please select a poem first');
+                return;
+            }
+
+            const canvas = document.getElementById('shareCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size for social media (1080x1080 for Instagram)
+            canvas.width = 1080;
+            canvas.height = 1080;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+            gradient.addColorStop(0, '#667eea');
+            gradient.addColorStop(1, '#764ba2');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // White container
+            ctx.fillStyle = 'white';
+            ctx.roundRect(60, 60, canvas.width - 120, canvas.height - 120, 20);
+            ctx.fill();
+            
+            // Title
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            const titleY = 180;
+            wrapText(ctx, currentPoem.title, canvas.width / 2, titleY, canvas.width - 160, 60);
+            
+            // Author
+            ctx.fillStyle = '#666';
+            ctx.font = 'italic 36px Arial';
+            ctx.fillText(`by ${currentPoem.author}`, canvas.width / 2, titleY + 100);
+            
+            // Poem content
+            ctx.fillStyle = '#444';
+            ctx.font = '32px Arial';
+            ctx.textAlign = 'center';
+            const contentY = titleY + 200;
+            wrapText(ctx, currentPoem.content, canvas.width / 2, contentY, canvas.width - 160, 45);
+            
+            // Add watermark image or text
+            if (watermarkImg.complete && watermarkImg.naturalWidth > 0) {
+                const watermarkSize = 80;
+                const watermarkX = canvas.width - watermarkSize - 60;
+                const watermarkY = canvas.height - watermarkSize - 60;
+                ctx.drawImage(watermarkImg, watermarkX, watermarkY, watermarkSize, watermarkSize);
+            } else {
+                // Fallback to text watermark
+                ctx.fillStyle = 'rgba(102, 126, 234, 0.6)';
+                ctx.font = '24px Arial';
+                ctx.fillText('Poetry Moments', canvas.width / 2, canvas.height - 80);
+            }
+            
+            // Download image
+            const link = document.createElement('a');
+            link.download = `${currentPoem.title.replace(/[^a-zA-Z0-9]/g, '_')}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+            const lines = text.split('\n');
+            let currentY = y;
+            
+            lines.forEach(line => {
+                const words = line.split(' ');
+                let currentLine = '';
+                
+                words.forEach(word => {
+                    const testLine = currentLine + word + ' ';
+                    const metrics = ctx.measureText(testLine);
+                    const testWidth = metrics.width;
+                    
+                    if (testWidth > maxWidth && currentLine !== '') {
+                        ctx.fillText(currentLine, x, currentY);
+                        currentLine = word + ' ';
+                        currentY += lineHeight;
+                    } else {
+                        currentLine = testLine;
+                    }
+                });
+                
+                ctx.fillText(currentLine, x, currentY);
+                currentY += lineHeight;
+            });
+        }
+
+        // Add roundRect function for older browsers
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+
+        // Initialize by loading poems from CSV
+        window.onload = function() {
+            loadPoems();
+        };
+    </script>
+</body>
+</html>
